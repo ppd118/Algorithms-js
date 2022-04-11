@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>异步并发数控制</title>
+</head>
+
+<body>
+    <div>
+        <h2>关键点</h2>
+        <ol>
+            <li>new promise 一经创建，立即执行</li>
+            <li>使用 Promise.resolve().then 可以把任务加到微任务队列，防止立即执行迭代方法</li>
+            <li>微任务处理过程中，产生的新的微任务，会在同一事件循环内，追加到微任务队列里</li>
+            <li>使用 race 在某个任务完成时，继续添加任务，保持任务按照最大并发数进行执行</li>
+            <li>任务完成后，需要从 doingTasks 中移出</li>
+        </ol>
+    </div>
+</body>
+<script>
+    function limit(count, array, func) {
+        const tasks = []
+        const doingTasks = []
+        let i = 0
+        // 任务进入队列
+        const enqueue = () => {
+            // 任务组执行完毕返回
+            if (i === array.length) {
+                return Promise.resolve()
+            }
+            // 用 Promise.resolve().then将第i个任务任务加入微任务队列
+            const task = Promise.resolve().then(() => func(array[i++]))
+            tasks.push(task)
+            // 将已经完成的任务取出
+            const doing = task.then(() => doingTasks.splice(doingTasks.indexOf(doing), 1))
+            doingTasks.push(doing)
+            // race 完成任务，有空闲则继续添加任务。否则不到并发数则直接执行
+            const res = doingTasks.length >= count ? Promise.race(doingTasks) : Promise.resolve()
+            return res.then(enqueue)
+        }
+        return enqueue().then(() => Promise.all(tasks))
+    }
+    // test
+    const timeout = i => new Promise(resolve => setTimeout(() => resolve(i), i))
+    limit(2, [1000, 1000, 1000, 1000], timeout).then((res) => {
+        console.log(res)
+    })
+</script>
+
+</html>
